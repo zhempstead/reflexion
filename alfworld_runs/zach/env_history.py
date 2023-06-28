@@ -63,6 +63,16 @@ class EnvironmentHistory:
         chat += self._get_split_prompt()
         return chat
 
+    def get_task_query(self):
+        chat = [
+            {"role": "system", "content": "You are an assistant that interacts with a household to solve tasks."},
+        ]
+        if self._examples:
+            for e in self._examples:
+                chat += e._get_task_prompt()
+        chat += self._get_task_prompt()
+        return chat
+
     def get_subtask_query(self):
         chat = [
             {"role": "system", "content": "You are an assistant that interacts with a household to solve a specific subtask of a larger task."},
@@ -93,6 +103,16 @@ class EnvironmentHistory:
             for subtask, history in self._history:
                 content.append(f'- {subtask}')
             chat.append({"role": "assistant", "content": '\n'.join(content)})
+        return chat
+
+    def _get_task_prompt(self):
+        content = [self._start_info]
+        content.append('')
+        chat = [
+            {"role": "user", "content": self._start_info}
+        ]
+        for subtask in range(self._curr_subtask + 1):
+            chat += self.get_subtask_history_chat(subtask)
         return chat
 
     def _get_subtask_prompt(self, subtask=None):

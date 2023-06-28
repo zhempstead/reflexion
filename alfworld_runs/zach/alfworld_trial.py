@@ -71,7 +71,8 @@ def process_ob(ob):
         ob = ob[ob.find('. ')+2:]    
     return ob
 
-def alfworld_run(env, examples, memory: List[str], to_print=True, ob='') -> Tuple[EnvironmentHistory, bool]:
+
+def alfworld_run(env, examples, memory: List[str], to_print=True, ob='', use_subtasks=True) -> Tuple[EnvironmentHistory, bool]:
     if len(memory) > 3:
         env_history = EnvironmentHistory(ob, [], 0, memory[-3:], examples)
     else:
@@ -82,21 +83,22 @@ def alfworld_run(env, examples, memory: List[str], to_print=True, ob='') -> Tupl
     if to_print:
         print(ob)
         sys.stdout.flush()
-    subtasks = llm(env_history.get_split_query()).strip()
-    print(subtasks)
-    import pdb; pdb.set_trace()
-    env_history.set_subtasks(subtasks)
+    if use_subtasks:
+        subtasks = llm(env_history.get_split_query()).strip()
+        print(subtasks)
+        env_history.set_subtasks(subtasks)
+    else:
+        env_history.set_subtasks('- N/A')
     cur_step = 0
-    if to_print:
+    if to_print and use_subtasks:
         print(f'*** SUBTASK: {env_history.get_subtask()} ***')
     while cur_step < 50:
-        # action = llm(init_prompt + prompt, stop=['\n']).strip()
-        action = llm(env_history.get_subtask_query(), stop=['\n']).strip()
-        #if action == '':
-            #print("Empty action. Here is what it would have been:")
-            #print('---')
-            #print(env_history.get_subtask_query() + llm(env_history.get_subtask_query()))
-            #print('...')
+        if use_subtasks:
+            query = env_history.get_subtask_query()
+        else:
+            query = env_history.get_task_query()
+        action = llm(query, stop=['\n']).strip()
+            
         env_history.add("action", action)
         observation, reward, done, info = env.step([action])
         observation, reward, done = process_ob(observation[0]), info['won'][0], done[0]
@@ -112,7 +114,7 @@ def alfworld_run(env, examples, memory: List[str], to_print=True, ob='') -> Tupl
         elif env_history.check_is_exhausted():
             return env_history, False
 
-        if env_history.get_subtask_observations() and not env_history.is_last_subtask():
+        if use_subtasks and env_history.get_subtask_observations() and not env_history.is_last_subtask():
             is_done = llm(env_history.get_done_query(), stop=['\n']).strip()
             if is_done.lower().startswith('yes'):
                 #print(env_history.get_done_query() + ' ' + is_done)
@@ -137,7 +139,8 @@ def run_trial(
         world_log_path: str,
         trial_idx: int,
         env_configs: List[Dict[str, Any]],
-        use_memory: bool
+        use_memory: bool,
+        use_subtasks: bool,
     ) -> List[Dict[str, Any]]:
     importlib.reload(alfworld)
     importlib.reload(alfworld.agents.environment)
@@ -173,7 +176,7 @@ def run_trial(
         for i, (k, v) in enumerate(PREFIXES.items()):
             if name.startswith(k):
                 examples = [example_histories[f'react_{v}_1'], example_histories[f'react_{v}_0']]
-                final_env_history, is_success = alfworld_run(env, examples, env_config["memory"] if use_memory else [], to_print=True, ob=ob)
+                final_env_history, is_success = alfworld_run(env, examples, env_config["memory"] if use_memory else [], to_print=True, ob=ob, use_subtasks=use_subtasks)
 
                 # update env config
                 if is_success:
