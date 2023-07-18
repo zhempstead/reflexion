@@ -1,6 +1,7 @@
 """Adapted from https://github.com/ysymyth/ReAct/blob/master/alfworld.ipynb"""
 
 import os
+from pathlib import Path
 import sys
 import json
 import yaml
@@ -135,7 +136,7 @@ PREFIXES = {
 }
 
 def run_trial(
-        trial_log_path: str,
+        log_dir: str,
         world_log_path: str,
         trial_idx: int,
         env_configs: List[Dict[str, Any]],
@@ -144,6 +145,8 @@ def run_trial(
     ) -> List[Dict[str, Any]]:
     importlib.reload(alfworld)
     importlib.reload(alfworld.agents.environment)
+
+    trial_log_path = os.path.join(log_dir, f'trial_{trial_idx}.log')
 
     with open('../base_config.yaml') as reader:
         config = yaml.safe_load(reader)
@@ -162,9 +165,15 @@ def run_trial(
         name = '/'.join(info['extra.gamefile'][0].split('/')[-3:-1])
 
         print(f"using {name}")
+    
+        simple_name = name.replace('/', '_')
+        task_log_path_succ = Path(log_dir) / f'{trial_idx}_{simple_name}_succ.txt'
+        task_log_path_fail = Path(log_dir) / f'{trial_idx}_{simple_name}_fail.txt'
 
-        if env_config["is_success"]:
+        if task_log_path_succ.exists() or env_config["is_success"]:
             num_successes += 1
+            if task_log_path_succ.exists():
+                num_additional_successes += 1
 
             # log to world log
             with open(world_log_path, 'a') as wf:
@@ -172,6 +181,13 @@ def run_trial(
             with open(trial_log_path, 'a') as wf:
                 wf.write(f'\n#####\n\nEnvironment #{z}: Success\n\n#####\n')
             continue
+        elif task_log_path_fail.exists():
+            with open(world_log_path, 'a') as wf:
+                wf.write(f'Environment #{z} Trial #{trial_idx}: FAIL\n')
+            with open(trial_log_path, 'a') as wf:
+                wf.write(f'\n#####\n\nEnvironment #{z}: Fail\n\n#####\n')
+            continue
+            
 
         for i, (k, v) in enumerate(PREFIXES.items()):
             if name.startswith(k):
@@ -184,8 +200,10 @@ def run_trial(
                     env_configs[z]['is_success'] = True
                     num_successes += 1
                     num_additional_successes += 1
+                    task_log_path_succ.touch()
                 else:
                     status_str: str = f'Environment #{z} Trial #{trial_idx}: FAIL'
+                    task_log_path_fail.touch()
 
                 # log to world log
                 with open(world_log_path, 'a') as f:
