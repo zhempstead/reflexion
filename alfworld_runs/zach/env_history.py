@@ -1,39 +1,46 @@
-from typing import List, Dict, Tuple
+import json
+from typing import Any, List, Dict, Tuple, Optional
 
+from functions import ALL_FUNCTIONS
 
 class EnvironmentHistory:
-    def __init__(self, start_info: str, history: List[Tuple[str, List[Dict[str, str]]]], curr_subtask: int, memory: List[str], examples: List['EnvironmentHistory']) -> None:
+    def __init__(self, start_info: str, history: List[Tuple[str, List[Dict[str, Any]]]], curr_subtask: int, memory: List[str], examples: List['EnvironmentHistory']) -> None:
         self._start_info = start_info
         self._history = history
         self._memory = memory #TODO: currently unused
-        self._last_action: str = ''
+        self._last_action: Optional[Dict[str, Any]] = None
         self._is_exhausted: bool = False
         self._curr_subtask = curr_subtask
         self._examples = examples
 
-    def add(self, label: str, value: str) -> None:
-        assert label in ['action', 'observation', 'human_edit']
+    def add_action(self, action_name: str, args: Dict) -> None:
         subtask, history = self._history[self._curr_subtask]
         history += [{
-            'label': label,
-            'value': value,
+            'label': 'action',
+            'action': action_name,
+            'args': args,
         }]
         self._history[self._curr_subtask] = (subtask, history)
-        if label == 'action':
-            if value == self._last_action:
-                self._is_exhausted = True
-            else:
-                self._last_action = value
+        if history[-1] == self._last_action:
+            self._is_exhausted = True
+        else:
+            self._last_action = history[-1]
+
+    def add_observation(self, action_name, response) -> None:
+        subtask, history = self._history[self._curr_subtask]
+        history += [{
+            'label': 'observation',
+            'action': action_name,
+            'response': response,
+        }]
+        self._history[self._curr_subtask] = (subtask, history)
 
     def set_subtasks(self, subtasks: str) -> None:
-        subtasks = f'- {subtasks}'
         self._history = []
         for line in subtasks.split('\n'):
             if not line:
                 continue
-            if not line.startswith('- '):
-                raise ValueError(f"Invalid subtask: {line}")
-            self._history.append((line[2:], []))
+            self._history.append((line, []))
 
     def advance_subtask(self) -> None:
         if self._curr_subtask < len(self._history) - 1:
@@ -86,10 +93,11 @@ class EnvironmentHistory:
     def get_done_query(self):
         chat = [{"role": "system", "content": "You are an assistant that decides whether a task has been completed."}]
 
-        chat += self._examples[0]._get_done_prompt(self._curr_subtask, as_example=True, example_neg=True)
-        chat += self._examples[0]._get_done_prompt(self._curr_subtask, as_example=True)
-        chat += self._examples[1]._get_done_prompt(self._curr_subtask, as_example=True)
-        chat += self._examples[1]._get_done_prompt(self._curr_subtask, as_example=True, example_neg=True)
+        if self._examples:
+            chat += self._examples[0]._get_done_prompt(self._curr_subtask, as_example=True, example_neg=True)
+            chat += self._examples[0]._get_done_prompt(self._curr_subtask, as_example=True)
+            chat += self._examples[1]._get_done_prompt(self._curr_subtask, as_example=True)
+            chat += self._examples[1]._get_done_prompt(self._curr_subtask, as_example=True, example_neg=True)
         chat += self._get_done_prompt()
         return chat
 
@@ -157,11 +165,21 @@ class EnvironmentHistory:
             subtask = self._curr_subtask
         history = []
         for item in self._history[subtask][1]:
-            value = item['value']
             if item['label'] == 'action':
-                history.append({"role": "assistant", "content": value})
+                history.append({
+                    "role": "assistant",
+                    "function_call": {
+                        "name": item['action'],
+                        "arguments": json.dumps(item['args']),
+                    },
+                    "content": None,
+                }), 
             else:
-                history.append({"role": "user", "content": value})
+                history.append({
+                    "role": "function",
+                    "name": item['action'],
+                    "content": item['response'],
+                })
         return history
 
     def get_subtask_observations(self, subtask=None):
@@ -169,9 +187,9 @@ class EnvironmentHistory:
             subtask = self._curr_subtask
         obs = []
         for item in self._history[subtask][1]:
-            if item['label'] != 'observation' or item['value'] == 'OK.':
+            if item['label'] != 'observation' or item['response'] == 'OK.':
                 continue
-            obs.append(item['value'])
+            obs.append(item['response'])
         return obs
         
 

@@ -10,6 +10,7 @@ import importlib
 import alfworld
 import alfworld.agents.environment
 from env_history import EnvironmentHistory
+from functions import action_str_to_dict, gpt_functions, ALL_FUNCTIONS
 
 from typing import List, Dict, Any, Tuple
 
@@ -34,11 +35,18 @@ with open(TASK_SPLIT_PROMPTS_FILE, 'r') as f:
         for idx in range(len(subtasks_txt)):
             subtask = entry['subtasks'][idx]
             subtask_history = []
+            last_action = None
             for item in subtasks_txt[idx].split('\n'):
                 if item.startswith('> '):
-                    subtask_history.append({'label': 'action', 'value': item[2:]})
+                    action, args = action_str_to_dict(item[2:])
+                    if action is None:
+                        raise ValueError(item)
+                    subtask_history.append({'label': 'action', 'action': action, 'args': args})
+                    last_action = action
                 else:
-                    subtask_history.append({'label': 'observation', 'value': item})
+                    if last_action is None:
+                        raise ValueError(f'{task} {item}')
+                    subtask_history.append({'label': 'observation', 'action': last_action, 'response': item})
             history.append((subtask, subtask_history))
 
 
@@ -53,7 +61,7 @@ def llm(chat, stop=None):
               messages=chat,
               temperature=cur_try * 0.2,
               max_tokens=100,
-              stop=stop
+              stop=stop,
             )
             text = response["choices"][0]["message"]["content"]
             # dumb way to do this
@@ -67,6 +75,32 @@ def llm(chat, stop=None):
         import sys
         sys.exit(1)
 
+def llm_func(chat, functions):
+    try:
+        cur_try = 0
+        while cur_try < 6:
+            response = openai.ChatCompletion.create(
+              model="gpt-3.5-turbo",
+              messages=chat,
+              temperature=cur_try * 0.2,
+              max_tokens=100,
+              functions=functions,
+            )
+            if 'function_call' in response["choices"][0]["message"]:
+                function_call = response["choices"][0]["message"]["function_call"]
+                try:
+                    function_call['arguments'] = json.loads(function_call['arguments'])
+                    return function_call
+                except:
+                    import pdb; pdb.set_trace()
+            cur_try += 1
+            print(f"... try {cur_try}")
+        return None
+    except Exception as e:
+        print(chat)
+        print(e)
+        import sys
+        sys.exit(1)
 def process_ob(ob):
     if ob.startswith('You arrive at loc '):
         ob = ob[ob.find('. ')+2:]    
@@ -98,16 +132,20 @@ def alfworld_run(env, examples, memory: List[str], to_print=True, ob='', use_sub
             query = env_history.get_subtask_query()
         else:
             query = env_history.get_task_query()
-        action = llm(query, stop=['\n']).strip()
-            
-        env_history.add("action", action)
-        observation, reward, done, info = env.step([action])
+        func = llm_func(query, functions=gpt_functions(include_react=True))
+        if func is None:
+            return env_history, False
+        action = func['name']
+        action_str = ALL_FUNCTIONS[action]['action'].format(**func['arguments'])
+        env_history.add_action(action, func['arguments'])
+
+        observation, reward, done, info = env.step([action_str])
         observation, reward, done = process_ob(observation[0]), info['won'][0], done[0]
-        if action.startswith('think:') or action.startswith('done'):
+        if action == 'think':
             observation = 'OK.'
-        env_history.add("observation", observation)
+        env_history.add_observation(action, observation)
         if to_print:
-            print(f'> {action}\n{observation}')
+            print(f'> {action_str}\n{observation}')
             sys.stdout.flush()
         # prompt += f' {action}\n{observation}\n>'
         if done:
