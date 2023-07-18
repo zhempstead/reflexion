@@ -1,4 +1,4 @@
-think: A cellphone is more likely to appear in coffeetable (1), diningtable (1), sidetable (1-2), drawer (1-4), sofa (1), dresser (1), garbagecan (1). I can check one by one, starting with coffeetable 1.
+> think: A cellphone is more likely to appear in coffeetable (1), diningtable (1), sidetable (1-2), drawer (1-4), sofa (1), dresser (1), garbagecan (1). I can check one by one, starting with coffeetable 1.
 OK.
 > go to coffeetable 1
 On the coffeetable 1, you see a box 1, a cellphone 3, and a plate 1.
@@ -10,7 +10,7 @@ On the sofa 1, you see a newspaper 2, a pillow 1, a remotecontrol 2, and a remot
 > put cellphone 3 in/on sofa 1
 You put the cellphone 3 in/on the sofa 1.
 
-> I have visited coffeetable (1), so the second cellphone is more likely to appear in diningtable (1), sidetable (1-2), drawer (1-4), sofa (1), dresser (1), garbagecan (1). I can check one by one, starting with diningtable 1.
+> think: I have visited coffeetable (1), so the second cellphone is more likely to appear in diningtable (1), sidetable (1-2), drawer (1-4), sofa (1), dresser (1), garbagecan (1). I can check one by one, starting with diningtable 1.
 OK.
 > go to diningtable 1
 On the diningtable 1, you see a cellphone 2, a keychain 2, a laptop 1, a statue 2, and a statue 1.
