@@ -17,6 +17,7 @@ def get_args():
     parser.add_argument("--resume_dir", type=str, help="If resume, the logging directory", default="")
     parser.add_argument("--start_trial_num", type=int, help="If resume, the start trial num", default=0)
     parser.add_argument("--use_subtasks", action='store_true', help="Split into subtasks")
+    parser.add_argument("--examples", choices=['full', 'basic', 'none', default='none', help='Few-shot examples')
 
     args = parser.parse_args()
 
@@ -97,7 +98,7 @@ def main(args) -> None:
             open(trial_env_configs_log_path, 'w').close()
 
         # run trial
-        run_trial(trial_log_path, world_log_path, trial_idx, env_configs, args.use_memory, args.use_subtasks)
+        run_trial(args.run_name, world_log_path, trial_idx, env_configs, args.use_memory, args.use_subtasks, args.examples)
 
         # update memory if needed
         if args.use_memory:

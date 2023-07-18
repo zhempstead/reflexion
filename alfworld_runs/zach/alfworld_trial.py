@@ -142,6 +142,7 @@ def run_trial(
         env_configs: List[Dict[str, Any]],
         use_memory: bool,
         use_subtasks: bool,
+        examples_level: str,
     ) -> List[Dict[str, Any]]:
     importlib.reload(alfworld)
     importlib.reload(alfworld.agents.environment)
@@ -190,8 +191,17 @@ def run_trial(
             
 
         for i, (k, v) in enumerate(PREFIXES.items()):
+            
             if name.startswith(k):
-                examples = [example_histories[f'react_{v}_1'], example_histories[f'react_{v}_0']]
+                if examples_level == "full":
+                    examples = [example_histories[f'react_{v}_1'], example_histories[f'react_{v}_0']]
+                elif examples_level == "basic":
+                    examples = [example_histories[f'react_put_1'], example_histories[f'react_put_0']]
+                elif: examples_level == "none":
+                    examples = []
+                else:
+                    raise ValueError(f"Invalid examples level '{examples_level}'")
+
                 final_env_history, is_success = alfworld_run(env, examples, env_config["memory"] if use_memory else [], to_print=True, ob=ob, use_subtasks=use_subtasks)
 
                 # update env config
