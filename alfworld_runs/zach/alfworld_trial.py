@@ -57,7 +57,7 @@ def llm(chat, stop=None):
         cur_try = 0
         while cur_try < 6:
             response = openai.ChatCompletion.create(
-              model="gpt-3.5-turbo",
+              model="gpt-4-0613",
               messages=chat,
               temperature=cur_try * 0.2,
               max_tokens=100,
@@ -80,7 +80,7 @@ def llm_func(chat, functions):
         cur_try = 0
         while cur_try < 6:
             response = openai.ChatCompletion.create(
-              model="gpt-3.5-turbo",
+              model="gpt-4-0613",
               messages=chat,
               temperature=cur_try * 0.2,
               max_tokens=100,
