@@ -235,7 +235,7 @@ def run_trial(
                     examples = [example_histories[f'react_{v}_1'], example_histories[f'react_{v}_0']]
                 elif examples_level == "basic":
                     examples = [example_histories[f'react_put_1'], example_histories[f'react_put_0']]
-                elif: examples_level == "none":
+                elif examples_level == "none":
                     examples = []
                 else:
                     raise ValueError(f"Invalid examples level '{examples_level}'")

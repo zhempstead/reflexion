@@ -17,7 +17,7 @@ def get_args():
     parser.add_argument("--resume_dir", type=str, help="If resume, the logging directory", default="")
     parser.add_argument("--start_trial_num", type=int, help="If resume, the start trial num", default=0)
     parser.add_argument("--use_subtasks", action='store_true', help="Split into subtasks")
-    parser.add_argument("--examples", choices=['full', 'basic', 'none', default='none', help='Few-shot examples')
+    parser.add_argument("--examples", choices=['full', 'basic', 'none'], default='none', help='Few-shot examples')
 
     args = parser.parse_args()
 
