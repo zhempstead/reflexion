@@ -107,7 +107,50 @@ REACT_FUNCTIONS = {
     },
 }
 
-ALL_FUNCTIONS = {**FUNCTIONS, **REACT_FUNCTIONS}
+SUBTASK_FUNCTIONS = {
+    "subtask_complete": {
+        "description": "Declare the current subtask complete, and identify the next subtask",
+        "parameters": {
+            "next_subtask": "The next sub-goal to achieve",
+        },
+        "action": "New subtask: {next_subtask}",
+        "param_pos": [2],
+    },
+    "subtask_abort": {
+        "description": "Decide that the current subtask isn't working, and choose another",
+        "parameters": {
+            "reason": "A sentence or two of the reason for aborting",
+            "new_subtask": "The new sub-goal to replace the aborted one",
+        },
+        "action": "Abort subtask: {reason} ... {new_subtask}",
+        "param_pos": [2, "rest"],
+    },
+}
+
+ALL_FUNCTIONS = {**FUNCTIONS, **REACT_FUNCTIONS, **SUBTASK_FUNCTIONS}
+
+def closest_subtask_func(num_subtasks):
+    return {
+        "name": "choose",
+        "description": "Choose the two subtasks from the list that would be most helpful for the current subtask",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "first_choice": {
+                    "type": "string",
+                    "description": "The best match",
+                    "enum": list(range(1, num_subtasks + 1)),
+                },
+                "second_choice": {
+                    "type": "string",
+                    "description": "The second-best match",
+                    "enum": list(range(1, num_subtasks + 1)),
+                },
+            },
+            "required": ["first_choice", "second_choice"],
+        },
+    }
+
 
 def action_str_to_dict(action_str):
     action = action_str.strip().split(' ')
@@ -126,11 +169,12 @@ def action_str_to_dict(action_str):
     raise ValueError(f"No match for '{action}'") 
         
 
-def gpt_functions(include_react=False):
+def gpt_functions(*extras):
     functions = FUNCTIONS
-    if include_react:
-        functions = ALL_FUNCTIONS
-    functions = functions.copy()
+    if 'react' in extras:
+        functions = {**functions, **REACT_FUNCTIONS}
+    if 'subtask' in extras:
+        functions = {**functions, **SUBTASK_FUNCTIONS}
     return [gpt_function(name, details) for name, details in functions.items()]
 
 def gpt_function(name, details):

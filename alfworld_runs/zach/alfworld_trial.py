@@ -21,8 +21,7 @@ PROMPT_FILE = 'alfworld_3prompts.json'
 TASK_SPLIT_PROMPTS_FILE = 'task_split_prompts.json'
 SUBTASK_PROMPTS_DIR = 'subtask_prompts'
 
-SUBTASK_QUESTION = "What subtasks does this entail?"
-
+'''
 example_histories = {}
 with open(TASK_SPLIT_PROMPTS_FILE, 'r') as f:
     for task, entry in json.load(f).items():
@@ -50,7 +49,8 @@ with open(TASK_SPLIT_PROMPTS_FILE, 'r') as f:
             history.append((subtask, subtask_history))
 
 
-        example_histories[task] = EnvironmentHistory(start_info=entry['description'], history=history, curr_subtask=0, memory=[], examples=[])
+        example_histories[task] = EnvironmentHistory(start_info=entry['description'], history=history, memory=[], )
+'''
 
 def llm(chat, stop=None):
     try:
@@ -83,7 +83,7 @@ def llm_func(chat, functions):
               model="gpt-4-0613",
               messages=chat,
               temperature=cur_try * 0.2,
-              max_tokens=100,
+              max_tokens=200,
               functions=functions,
             )
             if 'function_call' in response["choices"][0]["message"]:
@@ -108,42 +108,41 @@ def process_ob(ob):
 
 
 def alfworld_run(env, examples, memory: List[str], to_print=True, ob='', use_subtasks=True) -> Tuple[EnvironmentHistory, bool]:
-    if len(memory) > 3:
-        env_history = EnvironmentHistory(ob, [], 0, memory[-3:], examples)
-    else:
-        env_history = EnvironmentHistory(ob, [], 0, memory, examples)
-    env_history.reset()
+    #if len(memory) > 3:
+    #    env_history = EnvironmentHistory(ob, [], 0, memory[-3:], examples)
+    #else:
+    #    env_history = EnvironmentHistory(ob, [], 0, memory, examples)
+    #env_history.reset()
     # init_prompt = prompt + ob + '\n>'
     # prompt = ''
+    if use_subtasks:
+        ob += "\n\nYou will be assigning yourself subtasks and declaring when each subtask is complete. Your initial subtask: Think about your initial plan to split the task into subtasks."
+    env_history = EnvironmentHistory(ob, [])
     if to_print:
         print(ob)
         sys.stdout.flush()
-    if use_subtasks:
-        subtasks = llm(env_history.get_split_query()).strip()
-        print(subtasks)
-        env_history.set_subtasks(subtasks)
-    else:
-        env_history.set_subtasks('- N/A')
+
     cur_step = 0
-    if to_print and use_subtasks:
-        print(f'*** SUBTASK: {env_history.get_subtask()} ***')
     while cur_step < 50:
+        query = env_history.get_task_query()
+        extra_funcs = ['react']
         if use_subtasks:
-            query = env_history.get_subtask_query()
-        else:
-            query = env_history.get_task_query()
-        func = llm_func(query, functions=gpt_functions(include_react=True))
+            extra_funcs.append('subtask')
+        func = llm_func(query, functions=gpt_functions(*extra_funcs))
         if func is None:
             return env_history, False
         action = func['name']
         action_str = ALL_FUNCTIONS[action]['action'].format(**func['arguments'])
-        env_history.add_action(action, func['arguments'])
-
         observation, reward, done, info = env.step([action_str])
         observation, reward, done = process_ob(observation[0]), info['won'][0], done[0]
-        if action == 'think':
+        if action in ['think']:
             observation = 'OK.'
-        env_history.add_observation(action, observation)
+        elif action in ['subtask_complete']:
+            observation = f'OK. Confirming your new subtask is "{func["arguments"]["next_subtask"]}".'
+        elif action in ['subtask_abort']:
+            observation = f'OK. Confirming your new subtask is "{func["arguments"]["new_subtask"]}".'
+        env_history.add_action(action, func['arguments'], observation)
+
         if to_print:
             print(f'> {action_str}\n{observation}')
             sys.stdout.flush()
@@ -153,14 +152,6 @@ def alfworld_run(env, examples, memory: List[str], to_print=True, ob='', use_sub
         elif env_history.check_is_exhausted():
             return env_history, False
 
-        if use_subtasks and env_history.get_subtask_observations() and not env_history.is_last_subtask():
-            is_done = llm(env_history.get_done_query(), stop=['\n']).strip()
-            if is_done.lower().startswith('yes'):
-                #print(env_history.get_done_query() + ' ' + is_done)
-                #import pdb; pdb.set_trace()
-                env_history.advance_subtask()
-                if to_print:
-                    print(f'*** SUBTASK: {env_history.get_subtask()} ***')
         cur_step += 1
     return env_history, False
 
@@ -206,8 +197,8 @@ def run_trial(
         print(f"using {name}")
     
         simple_name = name.replace('/', '_')
-        task_log_path_succ = Path(log_dir) / f'{trial_idx}_{simple_name}_succ.txt'
-        task_log_path_fail = Path(log_dir) / f'{trial_idx}_{simple_name}_fail.txt'
+        task_log_path_succ = Path(log_dir) / f'{trial_idx}_{simple_name}_succ.json'
+        task_log_path_fail = Path(log_dir) / f'{trial_idx}_{simple_name}_fail.json'
 
         if task_log_path_succ.exists() or env_config["is_success"]:
             num_successes += 1
@@ -244,6 +235,9 @@ def run_trial(
 
                 # update env config
                 if is_success:
+                    history = final_env_history.get_history_chat()
+                    with task_log_path_succ.open(mode='w') as succ_file:
+                        succ_file.write(json.dumps(history))
                     status_str: str = f'Environment #{z} Trial #{trial_idx}: SUCCESS'
                     env_configs[z]['is_success'] = True
                     num_successes += 1
